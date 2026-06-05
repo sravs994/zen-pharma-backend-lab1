@@ -75,6 +75,117 @@ Confirm the student's repo appears in the `sub` list. GitHub Actions will assume
 
 ---
 
+## Instructor Cluster Setup
+
+Run these steps once on the EKS cluster before students start. All commands are run from the `zen-infra` directory cloned on your laptop.
+
+### Step 1 — Install cluster prerequisites
+
+Installs NGINX Ingress, ArgoCD, External Secrets Operator, and metrics-server via Helm.
+
+```bash
+cd zen-infra
+./scripts/01-install-prerequisites.sh
+```
+
+Prompts for:
+- EKS cluster name: `pharma-dev-cluster`
+- AWS region: `us-east-1`
+
+Save the ArgoCD admin password printed at the end — you'll need it for the UI.
+
+### Step 2 — Create the pharma AppProject
+
+```bash
+kubectl apply -f - <<'EOF'
+apiVersion: argoproj.io/v1alpha1
+kind: AppProject
+metadata:
+  name: pharma
+  namespace: argocd
+spec:
+  description: Pharma microservices project
+  sourceRepos:
+    - "https://github.com/DPP-2026/zen-gitops-lab1.git"
+  destinations:
+    - server: https://kubernetes.default.svc
+      namespace: dev
+    - server: https://kubernetes.default.svc
+      namespace: qa
+  clusterResourceWhitelist:
+    - group: "*"
+      kind: "*"
+  namespaceResourceWhitelist:
+    - group: "*"
+      kind: "*"
+EOF
+```
+
+### Step 3 — Create the auth-service ArgoCD Application
+
+```bash
+kubectl apply -f - <<'EOF'
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: auth-service-dev
+  namespace: argocd
+  finalizers:
+    - resources-finalizer.argocd.argoproj.io
+spec:
+  project: pharma
+  source:
+    repoURL: https://github.com/DPP-2026/zen-gitops-lab1.git
+    targetRevision: HEAD
+    path: helm-charts
+    helm:
+      valueFiles:
+        - ../envs/dev/values-auth-service.yaml
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: dev
+  syncPolicy:
+    automated:
+      prune: true
+      allowEmpty: false
+    syncOptions:
+      - CreateNamespace=true
+      - PrunePropagationPolicy=foreground
+      - PruneLast=true
+    retry:
+      limit: 5
+      backoff:
+        duration: 5s
+        factor: 2
+        maxDuration: 3m
+EOF
+```
+
+### Step 4 — Set up External Secrets
+
+Wires up AWS Secrets Manager → Kubernetes Secrets (`db-credentials`, `jwt-secret`) in the `dev` namespace via IRSA.
+
+```bash
+./scripts/03-setup-external-secrets.sh
+```
+
+Prompts for:
+- Environment: `dev`
+- AWS region: `us-east-1`
+- AWS account ID: `516209541629`
+- ESO IAM role name: `pharma-dev-eso-role`
+
+### Step 5 — Verify
+
+```bash
+kubectl get applications -n argocd
+kubectl get externalsecret -n dev
+```
+
+`auth-service-dev` should show `Synced` once a student's first CI build pushes an image and updates `envs/dev/values-auth-service.yaml`.
+
+---
+
 ## Prerequisites
 
 Install these on your laptop before the lab:
