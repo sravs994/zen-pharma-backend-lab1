@@ -556,28 +556,6 @@ Within 3 minutes, replicas go from `3` → `1` (what the values file says).
 
 ---
 
-## Part 7 — QA promotion
-
-The QA PR was opened automatically when the build finished. Merging it deploys the **same image** to QA — no rebuild.
-
-### Step 7.1 — Review and merge the QA PR
-
-1. Open your `zen-gitops-lab1` fork → **Pull requests**
-2. Open `promote(qa): auth-service → sha-abc1234`
-3. Look at the diff — it changes **only** `image.tag` in `envs/qa/values-auth-service.yaml`
-4. Merge it
-
-### Step 7.2 — Watch ArgoCD deploy to QA
-
-```bash
-argocd app get auth-service-qa
-kubectl get pods -n qa -w
-```
-
-Same `sha-abc1234` image, different namespace, different profile (`qa`), different DB host. No rebuild occurred.
-
----
-
 ## Complete flow — what you just built
 
 ```
