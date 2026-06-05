@@ -48,60 +48,30 @@ Your instructor will give you:
 
 ## Instructor Setup — OIDC and IAM role (`pharma-dev-github-actions-role`)
 
-Run this once per AWS account before the lab. Replace `<ACCOUNT_ID>` with the 12-digit AWS account ID and `<YOUR-USERNAME>` with the GitHub org/username that owns the fork.
+The role `pharma-dev-github-actions-role` already exists in account `516209541629`. Before each lab, update its trust policy to add each student's fork to the allowed `sub` list.
 
-### Step 1 — Create the GitHub OIDC identity provider
+### Step 1 — Add each student's fork to the trust policy
 
-Skip if `EntityAlreadyExists` is returned — the provider is already present.
-
-```bash
-aws iam create-open-id-connect-provider \
-  --url https://token.actions.githubusercontent.com \
-  --client-id-list sts.amazonaws.com \
-  --thumbprint-list 6938fd4d98bab03faadb97b34396831e3780aea1
-```
-
-Confirm:
+Replace `<STUDENT-USERNAME>` with the student's GitHub username. Run once per student.
 
 ```bash
-aws iam list-open-id-connect-providers
-```
-
-### Step 2 — Create the IAM role with inline trust policy
-
-Replace `<ACCOUNT_ID>` and `<YOUR-USERNAME>` before running.
-
-```bash
-aws iam create-role \
+aws iam update-assume-role-policy \
   --role-name pharma-dev-github-actions-role \
-  --assume-role-policy-document '{"Version":"2012-10-17","Statement":[{"Effect":"Allow","Principal":{"Federated":"arn:aws:iam::<ACCOUNT_ID>:oidc-provider/token.actions.githubusercontent.com"},"Action":"sts:AssumeRoleWithWebIdentity","Condition":{"StringEquals":{"token.actions.githubusercontent.com:aud":"sts.amazonaws.com"},"StringLike":{"token.actions.githubusercontent.com:sub":"repo:<YOUR-USERNAME>/zen-pharma-backend-lab1:*"}}}]}' \
-  --description "GitHub Actions OIDC role for zen-pharma-backend-lab1 CI/CD (ECR push)"
+  --policy-document '{"Version":"2012-10-17","Statement":[{"Effect":"Allow","Principal":{"Federated":"arn:aws:iam::516209541629:oidc-provider/token.actions.githubusercontent.com"},"Action":"sts:AssumeRoleWithWebIdentity","Condition":{"StringEquals":{"token.actions.githubusercontent.com:aud":"sts.amazonaws.com"},"StringLike":{"token.actions.githubusercontent.com:sub":["repo:DPP-2026/zen-pharma-frontend:ref:refs/heads/main","repo:DPP-2026/zen-pharma-frontend:ref:refs/heads/develop","repo:DPP-2026/zen-pharma-backend:ref:refs/heads/main","repo:DPP-2026/zen-pharma-backend:ref:refs/heads/develop","repo:<STUDENT-USERNAME>/zen-pharma-backend-lab1:ref:refs/heads/develop"]}}}]}'
 ```
 
-> The `sub` value must be `repo:<YOUR-USERNAME>/zen-pharma-backend-lab1:*` — a missing or wrong username causes every ECR push to fail with `AccessDenied`.
+> Each time you add a new student, include all previous entries in the `sub` list — `update-assume-role-policy` replaces the entire policy, not appends.
 
-### Step 3 — Attach the ECR permission policy inline
-
-Replace `<ACCOUNT_ID>` before running.
+### Step 2 — Verify
 
 ```bash
-aws iam put-role-policy \
+aws iam get-role \
   --role-name pharma-dev-github-actions-role \
-  --policy-name pharma-ecr-access \
-  --policy-document '{"Version":"2012-10-17","Statement":[{"Sid":"ECRAuth","Effect":"Allow","Action":"ecr:GetAuthorizationToken","Resource":"*"},{"Sid":"ECRPushPull","Effect":"Allow","Action":["ecr:BatchCheckLayerAvailability","ecr:BatchGetImage","ecr:CompleteLayerUpload","ecr:DescribeImages","ecr:DescribeRepositories","ecr:GetDownloadUrlForLayer","ecr:InitiateLayerUpload","ecr:ListImages","ecr:PutImage","ecr:UploadLayerPart"],"Resource":"arn:aws:ecr:us-east-1:<ACCOUNT_ID>:repository/*"}]}'
+  --query 'Role.AssumeRolePolicyDocument' \
+  --output json
 ```
 
-### Step 4 — Verify
-
-```bash
-aws iam get-role --role-name pharma-dev-github-actions-role --query 'Role.Arn' --output text
-
-aws iam get-role-policy \
-  --role-name pharma-dev-github-actions-role \
-  --policy-name pharma-ecr-access
-```
-
-GitHub Actions will assume `arn:aws:iam::<ACCOUNT_ID>:role/pharma-dev-github-actions-role` via the `AWS_ACCOUNT_ID` repository secret.
+Confirm the student's repo appears in the `sub` list. GitHub Actions will assume `arn:aws:iam::516209541629:role/pharma-dev-github-actions-role` via the `AWS_ACCOUNT_ID` repository secret (value: `516209541629`).
 
 ---
 
