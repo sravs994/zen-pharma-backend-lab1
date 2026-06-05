@@ -3,14 +3,7 @@
 You will wire up a complete delivery pipeline for `auth-service` — from a git push on your laptop to a running pod on Kubernetes, with ArgoCD ensuring the cluster always matches git.
 
 ```
-feature branch push
-      │
-      ▼
-GitHub Actions PR check
-  (tests + SAST, ~5 min, no Docker)
-      │
-      ▼
-merge to develop
+git push to develop
       │
       ▼
 GitHub Actions full CI
@@ -97,9 +90,7 @@ zen-pharma-backend-lab1/
 │   └── Dockerfile
 └── .github/
     └── workflows/
-        ├── _java-pr-check.yml      ← reusable: tests + SAST (no Docker)
         ├── _java-build.yml         ← reusable: full build + ECR push
-        ├── ci-pr-auth-service.yml  ← trigger: feature branches / PRs
         └── ci-auth-service.yml     ← trigger: develop merges
 ```
 
@@ -274,7 +265,7 @@ Leave this PR open for now — you will merge it in Part 6.
 
 ---
 
-### Step 4.4 — Verify the image is in ECR
+### Step 4.3 — Verify the image is in ECR
 
 ```bash
 aws ecr describe-images \
@@ -452,12 +443,7 @@ Same `sha-abc1234` image, different namespace, different profile (`qa`), differe
 ```
 your laptop
     │
-    │  git push feat-*
-    ▼
-GitHub Actions PR check
-    tests + SAST (~5 min, no Docker)
-    │
-    │  PR merged → develop
+    │  git push → develop
     ▼
 GitHub Actions full CI
     mvn verify → CodeQL → Semgrep
