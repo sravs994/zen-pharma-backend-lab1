@@ -46,6 +46,123 @@ Your instructor will give you:
 
 ---
 
+## Instructor Setup — OIDC and IAM role (`pharma-dev-github-actions-role`)
+
+Run this once per AWS account before the lab. Replace `<ACCOUNT_ID>` with the 12-digit AWS account ID and `<YOUR-USERNAME>` with the GitHub org/username that owns the fork.
+
+### Step 1 — Create the GitHub OIDC identity provider
+
+Skip if `EntityAlreadyExists` is returned — the provider is already present.
+
+```bash
+aws iam create-open-id-connect-provider \
+  --url https://token.actions.githubusercontent.com \
+  --client-id-list sts.amazonaws.com \
+  --thumbprint-list 6938fd4d98bab03faadb97b34396831e3780aea1
+```
+
+Confirm:
+
+```bash
+aws iam list-open-id-connect-providers
+```
+
+### Step 2 — Create the trust policy
+
+Save as `trust-policy.json`:
+
+```json
+{
+  "Version": "2012-10-17",
+  "Statement": [
+    {
+      "Effect": "Allow",
+      "Principal": {
+        "Federated": "arn:aws:iam::<ACCOUNT_ID>:oidc-provider/token.actions.githubusercontent.com"
+      },
+      "Action": "sts:AssumeRoleWithWebIdentity",
+      "Condition": {
+        "StringEquals": {
+          "token.actions.githubusercontent.com:aud": "sts.amazonaws.com"
+        },
+        "StringLike": {
+          "token.actions.githubusercontent.com:sub": "repo:<YOUR-USERNAME>/zen-pharma-backend-lab1:*"
+        }
+      }
+    }
+  ]
+}
+```
+
+> The `sub` value must be `repo:<YOUR-USERNAME>/zen-pharma-backend-lab1:*` — a missing or wrong username causes every ECR push to fail with `AccessDenied`.
+
+### Step 3 — Create the IAM role
+
+```bash
+aws iam create-role \
+  --role-name pharma-dev-github-actions-role \
+  --assume-role-policy-document file://trust-policy.json \
+  --description "GitHub Actions OIDC role for zen-pharma-backend-lab1 CI/CD (ECR push)"
+```
+
+### Step 4 — Create the ECR permission policy
+
+Save as `pharma-ecr-policy.json`:
+
+```json
+{
+  "Version": "2012-10-17",
+  "Statement": [
+    {
+      "Sid": "ECRAuth",
+      "Effect": "Allow",
+      "Action": "ecr:GetAuthorizationToken",
+      "Resource": "*"
+    },
+    {
+      "Sid": "ECRPushPull",
+      "Effect": "Allow",
+      "Action": [
+        "ecr:BatchCheckLayerAvailability",
+        "ecr:BatchGetImage",
+        "ecr:CompleteLayerUpload",
+        "ecr:DescribeImages",
+        "ecr:DescribeRepositories",
+        "ecr:GetDownloadUrlForLayer",
+        "ecr:InitiateLayerUpload",
+        "ecr:ListImages",
+        "ecr:PutImage",
+        "ecr:UploadLayerPart"
+      ],
+      "Resource": "arn:aws:ecr:us-east-1:<ACCOUNT_ID>:repository/*"
+    }
+  ]
+}
+```
+
+### Step 5 — Attach the policy to the role
+
+```bash
+aws iam put-role-policy \
+  --role-name pharma-dev-github-actions-role \
+  --policy-name pharma-ecr-access \
+  --policy-document file://pharma-ecr-policy.json
+```
+
+### Step 6 — Verify
+
+```bash
+aws iam get-role --role-name pharma-dev-github-actions-role --query 'Role.Arn' --output text
+
+aws iam get-role-policy \
+  --role-name pharma-dev-github-actions-role \
+  --policy-name pharma-ecr-access
+```
+
+GitHub Actions will assume `arn:aws:iam::<ACCOUNT_ID>:role/pharma-dev-github-actions-role` via the `AWS_ACCOUNT_ID` repository secret.
+
+---
+
 ## Prerequisites
 
 Install these on your laptop before the lab:
@@ -484,3 +601,116 @@ CI never talks to Kubernetes. CI talks to git. Kubernetes gets its orders from g
 | ArgoCD shows `OutOfSync` but not healing | `selfHeal` not enabled | Run `argocd app set auth-service-dev --self-heal` |
 | ArgoCD app still pointing at `DPP-2026/zen-gitops-lab1` | App repoURL not updated to your fork | Notify instructor — the app needs to be re-pointed to `https://github.com/<YOUR-USERNAME>/zen-gitops-lab1.git` |
 | `argocd: command not found` | argocd CLI not installed | `brew install argocd` (Mac) or see https://argo-cd.readthedocs.io/en/stable/cli_installation/ |
+
+Run this once per AWS account before the lab. Replace `<ACCOUNT_ID>` with the 12-digit AWS account ID and `<YOUR-USERNAME>` with the GitHub org/username that owns the fork.
+
+### Step 1 — Create the GitHub OIDC identity provider
+
+Skip if `EntityAlreadyExists` is returned — the provider is already present.
+
+```bash
+aws iam create-open-id-connect-provider \
+  --url https://token.actions.githubusercontent.com \
+  --client-id-list sts.amazonaws.com \
+  --thumbprint-list 6938fd4d98bab03faadb97b34396831e3780aea1
+```
+
+Confirm:
+
+```bash
+aws iam list-open-id-connect-providers
+```
+
+### Step 2 — Create the trust policy
+
+Save as `trust-policy.json`:
+
+```json
+{
+  "Version": "2012-10-17",
+  "Statement": [
+    {
+      "Effect": "Allow",
+      "Principal": {
+        "Federated": "arn:aws:iam::<ACCOUNT_ID>:oidc-provider/token.actions.githubusercontent.com"
+      },
+      "Action": "sts:AssumeRoleWithWebIdentity",
+      "Condition": {
+        "StringEquals": {
+          "token.actions.githubusercontent.com:aud": "sts.amazonaws.com"
+        },
+        "StringLike": {
+          "token.actions.githubusercontent.com:sub": "repo:<YOUR-USERNAME>/zen-pharma-backend-lab1:*"
+        }
+      }
+    }
+  ]
+}
+```
+
+> The `sub` value must be `repo:<YOUR-USERNAME>/zen-pharma-backend-lab1:*` — a missing or wrong username causes every ECR push to fail with `AccessDenied`.
+
+### Step 3 — Create the IAM role
+
+```bash
+aws iam create-role \
+  --role-name pharma-dev-github-actions-role \
+  --assume-role-policy-document file://trust-policy.json \
+  --description "GitHub Actions OIDC role for zen-pharma-backend-lab1 CI/CD (ECR push)"
+```
+
+### Step 4 — Create the ECR permission policy
+
+Save as `pharma-ecr-policy.json`:
+
+```json
+{
+  "Version": "2012-10-17",
+  "Statement": [
+    {
+      "Sid": "ECRAuth",
+      "Effect": "Allow",
+      "Action": "ecr:GetAuthorizationToken",
+      "Resource": "*"
+    },
+    {
+      "Sid": "ECRPushPull",
+      "Effect": "Allow",
+      "Action": [
+        "ecr:BatchCheckLayerAvailability",
+        "ecr:BatchGetImage",
+        "ecr:CompleteLayerUpload",
+        "ecr:DescribeImages",
+        "ecr:DescribeRepositories",
+        "ecr:GetDownloadUrlForLayer",
+        "ecr:InitiateLayerUpload",
+        "ecr:ListImages",
+        "ecr:PutImage",
+        "ecr:UploadLayerPart"
+      ],
+      "Resource": "arn:aws:ecr:us-east-1:<ACCOUNT_ID>:repository/*"
+    }
+  ]
+}
+```
+
+### Step 5 — Attach the policy to the role
+
+```bash
+aws iam put-role-policy \
+  --role-name pharma-dev-github-actions-role \
+  --policy-name pharma-ecr-access \
+  --policy-document file://pharma-ecr-policy.json
+```
+
+### Step 6 — Verify
+
+```bash
+aws iam get-role --role-name pharma-dev-github-actions-role --query 'Role.Arn' --output text
+
+aws iam get-role-policy \
+  --role-name pharma-dev-github-actions-role \
+  --policy-name pharma-ecr-access
+```
+
+GitHub Actions will assume `arn:aws:iam::<ACCOUNT_ID>:role/pharma-dev-github-actions-role` via the `AWS_ACCOUNT_ID` repository secret.
